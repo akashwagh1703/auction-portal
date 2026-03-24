@@ -16,10 +16,9 @@ const DEFAULTS = {
   default_bid_increments: '10000,25000,50000,100000',
   // Bidding rules
   bid_start_amount: 25,
-  bid_increment_type: 'tiered',
-  bid_increment_fixed: 1000,
-  bid_increment_tiers: '100,500,1000,2000',
-  bid_tier_every_n_bids: 3,
+  bid_increment_type: 'threshold',
+  bid_increment_fixed: 25,
+  bid_increment_thresholds: '200:25,max:50',
   bid_max_amount: 0,
 }
 

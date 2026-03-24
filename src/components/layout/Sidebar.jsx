@@ -5,7 +5,8 @@ import { useSettings } from '../../context/SettingsContext'
 import api from '../../services/api'
 import {
   LayoutDashboard, Users, Gavel, MessageSquare, Trophy,
-  LogOut, Menu, X, ChevronRight, UserCircle, Trash2, AlertTriangle, Settings
+  LogOut, Menu, X, ChevronRight, UserCircle, Trash2, AlertTriangle, Settings,
+  PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -19,25 +20,28 @@ const navItems = [
   { path: '/settings',  label: 'Settings',  icon: Settings,        roles: ['admin'] },
 ]
 
-function NavLink({ item, onClick }) {
+function NavLink({ item, collapsed, onClick }) {
   const location = useLocation()
   const active = location.pathname === item.path
   return (
     <Link
       to={item.path}
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+      title={collapsed ? item.label : undefined}
+      className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all ${
+        collapsed ? 'justify-center' : ''
+      } ${
         active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-700 hover:text-white'
       }`}
     >
-      <item.icon size={20} />
-      <span className="font-medium">{item.label}</span>
-      {active && <ChevronRight size={16} className="ml-auto" />}
+      <item.icon size={20} className="shrink-0" />
+      {!collapsed && <span className="font-medium">{item.label}</span>}
+      {!collapsed && active && <ChevronRight size={16} className="ml-auto" />}
     </Link>
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ collapsed = false, onToggle }) {
   const { user, logout } = useAuth()
   const { settings } = useSettings()
   const navigate = useNavigate()
@@ -70,10 +74,31 @@ export default function Sidebar() {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-800 text-white">
-      <div className="p-5 border-b border-slate-700">
-        <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className={`p-4 border-b border-slate-700 flex items-center ${
+        collapsed ? 'justify-center' : 'gap-3 justify-between'
+      }`}>
+        {!collapsed && (
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-xl overflow-hidden"
+              style={{ backgroundColor: settings.app_primary_color || '#2563eb' }}
+            >
+              {settings.app_logo && (settings.app_logo.startsWith('http') || settings.app_logo.startsWith('/')) ? (
+                <img src={settings.app_logo} alt="logo" className="w-full h-full object-cover" />
+              ) : (
+                settings.app_logo || '🏏'
+              )}
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-bold text-base leading-tight truncate">{settings.app_name || 'AuctionPro'}</h1>
+              <p className="text-xs text-slate-400 capitalize">{user?.role} Panel</p>
+            </div>
+          </div>
+        )}
+        {collapsed && (
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl overflow-hidden"
+            className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-xl overflow-hidden"
             style={{ backgroundColor: settings.app_primary_color || '#2563eb' }}
           >
             {settings.app_logo && (settings.app_logo.startsWith('http') || settings.app_logo.startsWith('/')) ? (
@@ -82,43 +107,55 @@ export default function Sidebar() {
               settings.app_logo || '🏏'
             )}
           </div>
-          <div>
-            <h1 className="font-bold text-lg leading-tight">{settings.app_name || 'AuctionPro'}</h1>
-            <p className="text-xs text-slate-400 capitalize">{user?.role} Panel</p>
-          </div>
-        </div>
+        )}
+        {/* Toggle button — desktop only */}
+        <button
+          onClick={onToggle}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-700 hover:text-white transition-colors shrink-0"
+        >
+          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {allowed.map(item => (
-          <NavLink key={item.path} item={item} onClick={() => setMobileOpen(false)} />
+          <NavLink key={item.path} item={item} collapsed={collapsed} onClick={() => setMobileOpen(false)} />
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-700">
-        <div className="flex items-center gap-3 mb-3 px-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-sm font-bold">
-            {user?.name?.[0]}
+      <div className={`p-3 border-t border-slate-700 ${ collapsed ? 'flex flex-col items-center gap-1' : '' }`}>
+        {!collapsed && (
+          <div className="flex items-center gap-3 mb-2 px-2">
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
+              {user?.name?.[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{user?.name}</p>
+              <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{user?.name}</p>
-            <p className="text-xs text-slate-400 truncate">{user?.email}</p>
-          </div>
-        </div>
+        )}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+          title={collapsed ? 'Logout' : undefined}
+          className={`flex items-center gap-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors ${
+            collapsed ? 'w-10 h-10 justify-center' : 'w-full px-4 py-2.5'
+          }`}
         >
           <LogOut size={18} />
-          <span className="text-sm font-medium">Logout</span>
+          {!collapsed && <span className="text-sm font-medium">Logout</span>}
         </button>
         {isAdmin && (
           <button
             onClick={() => { setResetModal(true); setConfirmText('') }}
-            className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-orange-400 hover:bg-orange-500/10 transition-colors mt-1"
+            title={collapsed ? 'Reset All Data' : undefined}
+            className={`flex items-center gap-2 rounded-xl text-orange-400 hover:bg-orange-500/10 transition-colors mt-1 ${
+              collapsed ? 'w-10 h-10 justify-center' : 'w-full px-4 py-2.5'
+            }`}
           >
             <Trash2 size={18} />
-            <span className="text-sm font-medium">Reset All Data</span>
+            {!collapsed && <span className="text-sm font-medium">Reset All Data</span>}
           </button>
         )}
       </div>
@@ -152,7 +189,9 @@ export default function Sidebar() {
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-64 h-screen fixed left-0 top-0 shadow-xl z-30">
+      <aside className={`hidden lg:flex lg:flex-col h-screen fixed left-0 top-0 shadow-xl z-30 transition-all duration-300 ${
+        collapsed ? 'w-16' : 'w-64'
+      }`}>
         <SidebarContent />
       </aside>
 

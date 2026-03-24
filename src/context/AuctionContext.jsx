@@ -171,16 +171,31 @@ export function AuctionProvider({ children }) {
       if (existing.find(b => b.id === bid.id)) return prev
       return { ...prev, [auctionId]: [bid, ...existing] }
     })
-    // Optimistically update team budget
+    // Capture current state snapshot before any updates
+    const prevState = liveStates[String(auctionId)] ?? {}
+    const prevHighestId = prevState.current_highest_bidder_id
+    const prevBid = Number(prevState.current_bid ?? 0)
+    // Update liveState with new current_bid + next_bid
+    setLiveStates(prev => {
+      const key = String(auctionId)
+      const existing = prev[key] ?? {}
+      return {
+        ...prev,
+        [key]: { ...existing, current_bid: bid.amount, current_highest_bidder_id: teamId, next_bid: bid.next_bid ?? existing.next_bid },
+      }
+    })
+    // Patch team budgets: restore previous highest bidder's reserved amount, deduct new bidder
     setAuctions(prev => prev.map(a => {
       if (a.id !== Number(auctionId)) return a
       return {
         ...a,
-        teams: (a.teams ?? []).map(t =>
-          t.id === teamId
-            ? { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) - amount } }
-            : t
-        ),
+        teams: (a.teams ?? []).map(t => {
+          if (prevHighestId && t.id === Number(prevHighestId) && t.id !== teamId)
+            return { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) + prevBid } }
+          if (t.id === teamId)
+            return { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) - bid.amount } }
+          return t
+        }),
       }
     }))
     return bid
@@ -203,6 +218,21 @@ export function AuctionProvider({ children }) {
     const auctionRes = await api.get(`/auctions/${auctionId}`)
     const updated = auctionRes.data.data ?? auctionRes.data
     setAuctions(prev => prev.map(a => a.id === Number(auctionId) ? updated : a))
+  }
+
+  const reAuction = async (auctionId, playerId = null) => {
+    await api.post(`/auctions/${auctionId}/re-auction`, playerId ? { player_id: playerId } : {})
+    setAuctions(prev => prev.map(a => {
+      if (a.id !== Number(auctionId)) return a
+      return {
+        ...a,
+        players: (a.players ?? []).map(p => {
+          if (p.pivot?.status !== 'unsold') return p
+          if (playerId && p.id !== playerId) return p
+          return { ...p, pivot: { ...p.pivot, status: 'pending', sold_to_team_id: null, sold_price: null } }
+        }),
+      }
+    }))
   }
 
   const sendMessage = async (auctionId, message) => {
@@ -274,8 +304,9 @@ export function AuctionProvider({ children }) {
   return (
     <AuctionContext.Provider value={{
       players, teams, auctions, liveStates, bids, chats, loading,
+      setLiveStates,
       createAuction, updateAuction, deleteAuction, getAuction,
-      startAuction, stopAuction, nextPlayer, placeBid, soldPlayer, markUnsold,
+      startAuction, stopAuction, nextPlayer, placeBid, soldPlayer, markUnsold, reAuction,
       sendMessage, loadAuctionRoom, subscribeToAuction,
       addPlayer, updatePlayer, deletePlayer, importPlayers,
       addTeam, updateTeam, deleteTeam, importTeams, refreshTeams,

@@ -46,10 +46,9 @@ export default function SettingsPage() {
   // ── Bidding rules form
   const [bidRules, setBidRules] = useState({
     bid_start_amount: '',
-    bid_increment_type: 'tiered',
+    bid_increment_type: 'threshold',
     bid_increment_fixed: '',
-    bid_increment_tiers: '',
-    bid_tier_every_n_bids: '',
+    bid_increment_thresholds: '',
     bid_max_amount: '',
   })
 
@@ -77,12 +76,11 @@ export default function SettingsPage() {
       default_bid_increments:  settings.default_bid_increments  ?? '10000,25000,50000,100000',
     })
     setBidRules({
-      bid_start_amount:      settings.bid_start_amount      ?? 100,
-      bid_increment_type:    settings.bid_increment_type    ?? 'tiered',
-      bid_increment_fixed:   settings.bid_increment_fixed   ?? 1000,
-      bid_increment_tiers:   settings.bid_increment_tiers   ?? '100,500,1000,2000',
-      bid_tier_every_n_bids: settings.bid_tier_every_n_bids ?? 3,
-      bid_max_amount:        settings.bid_max_amount        ?? 0,
+      bid_start_amount:        settings.bid_start_amount        ?? 25,
+      bid_increment_type:      settings.bid_increment_type      ?? 'threshold',
+      bid_increment_fixed:     settings.bid_increment_fixed     ?? 25,
+      bid_increment_thresholds: settings.bid_increment_thresholds ?? '200:25,max:50',
+      bid_max_amount:          settings.bid_max_amount          ?? 0,
     })
     setLoginCfg({
       show_demo_login:       settings.show_demo_login       ?? true,
@@ -160,17 +158,21 @@ export default function SettingsPage() {
   const saveBidRules = async () => {
     if (bidRules.bid_increment_type === 'fixed' && Number(bidRules.bid_increment_fixed) < 1)
       return toast.error('Fixed increment must be at least 1')
-    if (bidRules.bid_increment_type === 'tiered' && !bidRules.bid_increment_tiers.toString().trim())
-      return toast.error('Tiered increments cannot be empty')
+    if (bidRules.bid_increment_type === 'threshold') {
+      const raw = bidRules.bid_increment_thresholds.toString().trim()
+      if (!raw) return toast.error('Thresholds cannot be empty')
+      const segments = raw.split(',').map(s => s.trim())
+      const hasMax = segments.some(s => s.toLowerCase().startsWith('max:'))
+      if (!hasMax) return toast.error('Thresholds must end with a max: entry, e.g. max:50')
+    }
     setSaving(true)
     try {
       await updateSettings({
-        bid_start_amount:      Number(bidRules.bid_start_amount),
-        bid_increment_type:    bidRules.bid_increment_type,
-        bid_increment_fixed:   Number(bidRules.bid_increment_fixed),
-        bid_increment_tiers:   bidRules.bid_increment_tiers.toString(),
-        bid_tier_every_n_bids: Number(bidRules.bid_tier_every_n_bids),
-        bid_max_amount:        Number(bidRules.bid_max_amount),
+        bid_start_amount:         Number(bidRules.bid_start_amount),
+        bid_increment_type:       bidRules.bid_increment_type,
+        bid_increment_fixed:      Number(bidRules.bid_increment_fixed),
+        bid_increment_thresholds: bidRules.bid_increment_thresholds.toString(),
+        bid_max_amount:           Number(bidRules.bid_max_amount),
       })
       toast.success('Bidding rules saved!')
     } catch { toast.error('Failed to save') }
@@ -520,7 +522,7 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-300">Increment Type</label>
               <div className="grid grid-cols-2 gap-2">
-                {[['fixed', 'Fixed', 'Same jump every bid'], ['tiered', 'Tiered', 'Escalates as bids increase']].map(([val, label, desc]) => (
+                {[['fixed', 'Fixed', 'Same jump every bid'], ['threshold', 'Threshold', 'Jump changes by price level']].map(([val, label, desc]) => (
                   <button
                     key={val}
                     onClick={() => setBidRules(b => ({ ...b, bid_increment_type: val }))}
@@ -545,51 +547,49 @@ export default function SettingsPage() {
                   type="text" inputMode="numeric"
                   value={bidRules.bid_increment_fixed}
                   onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_increment_fixed: e.target.value })) }}
-                  placeholder="1000"
+                  placeholder="25"
                 />
-                <p className="text-xs text-slate-500">Every bid must be exactly this much higher than the current bid.</p>
+                <p className="text-xs text-slate-500">Every bid is exactly this much higher than the current bid.</p>
               </div>
             )}
 
-            {/* Tiered increments */}
-            {bidRules.bid_increment_type === 'tiered' && (
+            {/* Threshold increments */}
+            {bidRules.bid_increment_type === 'threshold' && (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-300">Bid Increment Tiers (₹, comma separated)</label>
+                  <label className="text-sm font-medium text-slate-300">Price Thresholds</label>
                   <input
-                    value={bidRules.bid_increment_tiers}
-                    onChange={e => setBidRules(b => ({ ...b, bid_increment_tiers: e.target.value }))}
-                    placeholder="100,500,1000,2000"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={bidRules.bid_increment_thresholds}
+                    onChange={e => setBidRules(b => ({ ...b, bid_increment_thresholds: e.target.value }))}
+                    placeholder="200:25,max:50"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono"
                   />
-                  <p className="text-xs text-slate-500">Starts at tier 1, escalates to next tier after every N bids on the same player.</p>
+                  <p className="text-xs text-slate-500">
+                    Format: <span className="text-slate-300 font-mono">price:increment</span> pairs, comma separated. Use <span className="text-slate-300 font-mono">max</span> as the final fallback.<br />
+                    Example: <span className="text-slate-300 font-mono">200:25,max:50</span> means +₹25 while bid &lt; ₹200, then +₹50 after.
+                  </p>
                 </div>
 
-                {/* Tier preview */}
-                <div className="bg-slate-700/50 rounded-xl p-3">
-                  <p className="text-xs text-slate-400 mb-2">Tier preview</p>
-                  <div className="flex flex-wrap gap-2">
-                    {bidRules.bid_increment_tiers.toString().split(',').map((v, i) => {
-                      const n = Number(v.trim())
-                      return n ? (
-                        <div key={i} className="flex flex-col items-center px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-xl">
-                          <span className="text-xs text-slate-400">Tier {i + 1}</span>
-                          <span className="text-sm font-bold text-blue-300">+{fmt(n)}</span>
-                        </div>
-                      ) : null
-                    })}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Input
-                    label="Escalate to next tier every N bids"
-                    type="text" inputMode="numeric"
-                    value={bidRules.bid_tier_every_n_bids}
-                    onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_tier_every_n_bids: e.target.value })) }}
-                    placeholder="3"
-                  />
-                  <p className="text-xs text-slate-500">E.g. 3 means after 3 bids on a player, jump to the next tier.</p>
+                {/* Threshold breakdown */}
+                <div className="bg-slate-700/50 rounded-xl p-3 space-y-1.5">
+                  <p className="text-xs text-slate-400 mb-2">Threshold breakdown</p>
+                  {bidRules.bid_increment_thresholds.toString().split(',').map((seg, i) => {
+                    const parts = seg.trim().split(':')
+                    if (parts.length !== 2) return null
+                    const [limit, inc] = parts.map(s => s.trim())
+                    const isMax = limit.toLowerCase() === 'max'
+                    return (
+                      <div key={i} className="flex items-center gap-3 text-xs">
+                        <span className={`px-2 py-1 rounded-lg font-mono font-bold ${
+                          isMax ? 'bg-orange-500/20 text-orange-300' : 'bg-blue-500/20 text-blue-300'
+                        }`}>
+                          {isMax ? '≥ all' : `< ₹${Number(limit).toLocaleString()}`}
+                        </span>
+                        <span className="text-slate-400">→</span>
+                        <span className="text-green-400 font-bold">+₹{Number(inc).toLocaleString()}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -611,35 +611,47 @@ export default function SettingsPage() {
               <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Live Simulation</p>
               {(() => {
                 const type = bidRules.bid_increment_type
-                const start = Number(bidRules.bid_start_amount) || 100
-                const tiers = bidRules.bid_increment_tiers.toString().split(',').map(v => Number(v.trim())).filter(Boolean)
-                const fixed = Number(bidRules.bid_increment_fixed) || 1000
-                const n = Number(bidRules.bid_tier_every_n_bids) || 3
+                const start = Number(bidRules.bid_start_amount) || 25
+                const fixed = Number(bidRules.bid_increment_fixed) || 25
                 const max = Number(bidRules.bid_max_amount) || 0
+
+                // Parse thresholds: "200:25,max:50" → [{limit:200,inc:25},{limit:Infinity,inc:50}]
+                const thresholds = (bidRules.bid_increment_thresholds || '').toString()
+                  .split(',').map(s => {
+                    const [l, i] = s.trim().split(':')
+                    return { limit: l?.toLowerCase() === 'max' ? Infinity : Number(l), inc: Number(i) }
+                  }).filter(t => !isNaN(t.inc) && t.inc > 0)
+
+                const getIncrement = (currentBid) => {
+                  if (type === 'fixed') return fixed
+                  for (const t of thresholds) {
+                    if (currentBid < t.limit) return t.inc
+                  }
+                  return thresholds[thresholds.length - 1]?.inc || fixed
+                }
+
+                const steps = [{ bid: 0, amount: start, inc: 0, label: 'Opening' }]
                 let current = start
-                const steps = []
-                for (let i = 0; i < 8; i++) {
-                  const tierIdx = type === 'fixed' ? 0 : Math.min(Math.floor(i / n), tiers.length - 1)
-                  const inc = type === 'fixed' ? fixed : (tiers[tierIdx] || tiers[0] || 100)
+                for (let i = 0; i < 10; i++) {
+                  const inc = getIncrement(current)
                   const next = current + inc
                   if (max > 0 && next > max) break
-                  steps.push({ bid: i + 1, amount: next, inc, tier: tierIdx + 1 })
+                  steps.push({ bid: i + 1, amount: next, inc })
                   current = next
+                  if (steps.length >= 10) break
                 }
                 return (
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                       <span className="w-8">Bid</span>
-                      <span className="w-20">Amount</span>
-                      <span className="w-20">+Increment</span>
-                      {type === 'tiered' && <span>Tier</span>}
+                      <span className="w-24">Amount</span>
+                      <span>+Increment</span>
                     </div>
-                    {steps.map(s => (
-                      <div key={s.bid} className="flex items-center gap-2 text-xs">
-                        <span className="w-8 text-slate-500">#{s.bid}</span>
-                        <span className="w-20 font-bold text-green-400">{fmt(s.amount)}</span>
-                        <span className="w-20 text-blue-400">+{fmt(s.inc)}</span>
-                        {type === 'tiered' && <span className="text-slate-500">Tier {s.tier}</span>}
+                    {steps.map((s, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="w-8 text-slate-500">{s.label ?? `#${s.bid}`}</span>
+                        <span className="w-24 font-bold text-green-400">{fmt(s.amount)}</span>
+                        <span className="text-blue-400">{s.inc > 0 ? `+${fmt(s.inc)}` : '—'}</span>
                       </div>
                     ))}
                     {max > 0 && <p className="text-xs text-red-400 mt-1">🛑 Cap at {fmt(max)}</p>}
