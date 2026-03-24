@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuction } from '../context/AuctionContext'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import {
   Play, Square, CheckCircle, XCircle, ArrowLeft,
   Gavel, Send, MessageSquare, Users, Shuffle, RefreshCw
@@ -16,6 +17,7 @@ export default function AuctionRoomPage() {
   const navigate = useNavigate()
   const { auctions, liveStates, bids, chats, startAuction, stopAuction, nextPlayer, placeBid, soldPlayer, markUnsold, sendMessage, loadAuctionRoom, subscribeToAuction } = useAuction()
   const { user } = useAuth()
+  const { settings } = useSettings()
 
   const [selectedTeamId, setSelectedTeamId] = useState(null)
   const [chatMsg, setChatMsg] = useState('')
@@ -42,12 +44,11 @@ export default function AuctionRoomPage() {
   const currentPlayer = useMemo(() => auctionPlayers.find(p => p.id === liveState.current_player_id), [auctionPlayers, liveState.current_player_id])
   const leadingTeam = useMemo(() => auctionTeams.find(t => t.id === liveState.current_highest_bidder_id), [auctionTeams, liveState.current_highest_bidder_id])
 
-  const smartIncrement = useMemo(() => {
-    const increments = auction?.bid_increments ?? []
-    if (increments.length === 0) return 0
-    const playerBidCount = (bids[id] ?? []).filter(b => b.player_id === liveState.current_player_id).length
-    return playerBidCount < 4 ? increments[0] : increments[increments.length - 1]
-  }, [auction?.bid_increments, bids, id, liveState.current_player_id])
+  // next_bid comes directly from server — no frontend computation needed
+  const nextBid = Number(liveState.next_bid ?? 0)
+  const smartIncrement = nextBid > Number(liveState.current_bid ?? 0)
+    ? nextBid - Number(liveState.current_bid ?? 0)
+    : Number(settings.bid_increment_fixed ?? settings.bid_increment_tiers?.toString().split(',')[0] ?? 100)
 
   const isAdmin = user?.role === 'admin'
   const isOwner = user?.role === 'owner'
@@ -119,28 +120,32 @@ export default function AuctionRoomPage() {
     return () => { clearInterval(fast); clearTimeout(slowTimer) }
   }
 
+  const liveStateRef = useRef(liveState)
+  useEffect(() => { liveStateRef.current = liveState }, [liveState])
+
   const handleBid = useCallback(async (teamId) => {
-    if (!liveState.is_live) return toast.error('Auction not live')
-    if (!liveState.current_player_id) return toast.error('No player up for bidding')
+    const state = liveStateRef.current
+    if (!state.is_live) return toast.error('Auction not live')
+    if (!state.current_player_id) return toast.error('No player up for bidding')
     const bidTeamId = teamId ?? (isAdmin ? selectedTeamId : user?.team_id)
     if (!bidTeamId) return toast.error(isAdmin ? 'Click a team card to bid' : 'No team assigned')
-    if (bidTeamId === liveState.current_highest_bidder_id) return toast.error('This team is already the highest bidder!')
+    if (bidTeamId === state.current_highest_bidder_id) return toast.error('This team is already the highest bidder!')
     const bidTeam = auctionTeams.find(t => t.id === bidTeamId)
     if (!bidTeam) return toast.error('Team not found')
-    if (!smartIncrement) return toast.error('No bid increments configured')
-    const currentBid = liveState.current_bid ?? currentPlayer?.base_price ?? 0
-    const newAmount = currentBid + smartIncrement
-    if (newAmount > (bidTeam.pivot?.budget_remaining ?? 0)) return toast.error(`Insufficient budget for ${bidTeam.name}!`)
+    const amount = Number(state.next_bid ?? 0)
+    if (!amount) return toast.error('Next bid amount not available, please refresh')
+    const budgetRemaining = Number(bidTeam.pivot?.budget_remaining ?? 0)
+    if (amount > budgetRemaining) return toast.error(`Insufficient budget for ${bidTeam.name}!`)
     setBiddingTeamId(bidTeamId)
     try {
-      await placeBid(auction.id, bidTeamId, newAmount)
-      toast.success(`${bidTeam.name} → ${fmt(newAmount)}`)
+      await placeBid(auction.id, bidTeamId, amount)
+      toast.success(`${bidTeam.name} → ${fmt(amount)}`)
     } catch (err) {
       toast.error(err.response?.data?.message ?? 'Failed to place bid')
     } finally {
       setBiddingTeamId(null)
     }
-  }, [liveState, currentPlayer, auctionTeams, isAdmin, user, smartIncrement, auction, placeBid, selectedTeamId])
+  }, [auctionTeams, isAdmin, user, auction, placeBid, selectedTeamId])
 
   const handleSold = useCallback(async () => {
     if (!liveState.current_highest_bidder_id) return toast.error('No bids placed yet')
@@ -308,7 +313,7 @@ export default function AuctionRoomPage() {
             {liveState.is_live && (
               <div className="text-center shrink-0">
                 <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">Next Bid</p>
-                <p className="text-lg font-bold text-blue-400 tabular-nums">{fmt((liveState.current_bid ?? 0) + smartIncrement)}</p>
+                <p className="text-lg font-bold text-blue-400 tabular-nums">{fmt(nextBid)}</p>
                 <p className="text-xs text-slate-600">+{fmt(smartIncrement)}</p>
               </div>
             )}
@@ -500,7 +505,8 @@ export default function AuctionRoomPage() {
                   {auctionTeams.map(t => {
                     const isLeading = t.id === liveState.current_highest_bidder_id
                     const isBidding = t.id === biddingTeamId
-                    const nobudget = (liveState.current_bid ?? 0) + smartIncrement > (t.pivot?.budget_remaining ?? 0)
+                    const budgetLeft = Number(t.pivot?.budget_remaining ?? 0)
+                    const nobudget = nextBid > budgetLeft
                     return (
                       <button
                         key={t.id}
@@ -516,7 +522,7 @@ export default function AuctionRoomPage() {
                         <span className="text-base leading-none">{t.logo}</span>
                         <span className="truncate flex-1 text-left">{t.name}</span>
                         <span className="shrink-0 opacity-60 text-xs">
-                          {isLeading ? '🏆' : nobudget ? '💸' : fmt(t.pivot?.budget_remaining ?? 0)}
+                          {isLeading ? '🏆' : nobudget ? '💸' : fmt(budgetLeft)}
                         </span>
                       </button>
                     )
@@ -537,7 +543,8 @@ export default function AuctionRoomPage() {
             {isOwner && liveState.is_live && (() => {
               const myTeam = auctionTeams.find(t => t.id === user?.team_id)
               const isLeading = user?.team_id === liveState.current_highest_bidder_id
-              const nobudget = myTeam && ((liveState.current_bid ?? 0) + smartIncrement > (myTeam.pivot?.budget_remaining ?? 0))
+              const myBudget = Number(myTeam?.pivot?.budget_remaining ?? 0)
+              const nobudget = myTeam && (nextBid > myBudget)
               return (
                 <div className="px-4 py-3">
                   <button
@@ -551,11 +558,11 @@ export default function AuctionRoomPage() {
                     }`}
                   >
                     <Gavel size={16} />
-                    {isLeading ? '🏆 Your team is leading' : nobudget ? '💸 Insufficient budget' : `Place Bid — ${fmt((liveState.current_bid ?? 0) + smartIncrement)}`}
+                    {isLeading ? '🏆 Your team is leading' : nobudget ? '💸 Insufficient budget' : `Place Bid — ${fmt(nextBid)}`}
                   </button>
                   {myTeam && (
                     <p className="text-center text-xs text-slate-600 mt-1.5">
-                      Budget left: <span className="text-slate-400 font-semibold">{fmt(myTeam.pivot?.budget_remaining ?? 0)}</span>
+                      Budget left: <span className="text-slate-400 font-semibold">{fmt(myBudget)}</span>
                     </p>
                   )}
                 </div>
@@ -612,13 +619,13 @@ export default function AuctionRoomPage() {
             )}
             <div className="space-y-2">
               {auctionTeams.map(team => {
-                const budgetRemaining = team.pivot?.budget_remaining ?? auction.budget_per_team ?? 0
-                const spent = (auction.budget_per_team ?? 0) - budgetRemaining
+                const budgetRemaining = Number(team.pivot?.budget_remaining ?? auction.budget_per_team ?? 0)
+                const spent = Number(auction.budget_per_team ?? 0) - budgetRemaining
                 const pct = auction.budget_per_team ? Math.round((spent / auction.budget_per_team) * 100) : 0
                 const isLeading = team.id === liveState.current_highest_bidder_id
                 const isBidding = team.id === biddingTeamId
                 const canClickBid = isAdmin && liveState.is_live && !isLeading && liveState.current_player_id
-                const nobudget = (liveState.current_bid ?? 0) + smartIncrement > budgetRemaining
+                const nobudget = nextBid > budgetRemaining
                 return (
                   <div
                     key={team.id}

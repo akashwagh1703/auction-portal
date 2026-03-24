@@ -14,6 +14,13 @@ const DEFAULTS = {
   default_budget_per_team: 1000000,
   default_max_players: 15,
   default_bid_increments: '10000,25000,50000,100000',
+  // Bidding rules
+  bid_start_amount: 100,
+  bid_increment_type: 'tiered',
+  bid_increment_fixed: 1000,
+  bid_increment_tiers: '100,500,1000,2000',
+  bid_tier_every_n_bids: 3,
+  bid_max_amount: 0,
 }
 
 export function SettingsProvider({ children }) {

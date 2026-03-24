@@ -112,12 +112,24 @@ export function AuctionProvider({ children }) {
   const placeBid = async (auctionId, teamId, amount) => {
     const res = await api.post(`/auctions/${auctionId}/bid`, { team_id: teamId, amount })
     const bid = res.data.data ?? res.data
-    // Optimistic update — Pusher will also fire but dedup by id is handled by spread
+    // update bid list
     setBids(prev => {
       const existing = prev[auctionId] ?? []
       if (existing.find(b => b.id === bid.id)) return prev
       return { ...prev, [auctionId]: [bid, ...existing] }
     })
+    // update team budget_remaining optimistically in auctions state
+    setAuctions(prev => prev.map(a => {
+      if (a.id !== Number(auctionId)) return a
+      return {
+        ...a,
+        teams: (a.teams ?? []).map(t =>
+          t.id === teamId
+            ? { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) - amount } }
+            : t
+        ),
+      }
+    }))
     return bid
   }
 

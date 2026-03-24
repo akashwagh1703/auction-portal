@@ -8,6 +8,9 @@ export function getEcho() {
 
   window.Pusher = Pusher
 
+  // read token fresh each time Echo is initialised (handles re-login)
+  const token = localStorage.getItem('auth_token')
+
   echoInstance = new Echo({
     broadcaster: 'reverb',
     key: import.meta.env.VITE_REVERB_APP_KEY,
@@ -19,7 +22,7 @@ export function getEcho() {
     authEndpoint: `${import.meta.env.VITE_API_URL}/broadcasting/auth`,
     auth: {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        Authorization: `Bearer ${token}`,
       },
     },
   })

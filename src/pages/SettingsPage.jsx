@@ -43,6 +43,16 @@ export default function SettingsPage() {
     default_bid_timer: '', default_budget_per_team: '', default_max_players: '', default_bid_increments: '',
   })
 
+  // ── Bidding rules form
+  const [bidRules, setBidRules] = useState({
+    bid_start_amount: '',
+    bid_increment_type: 'tiered',
+    bid_increment_fixed: '',
+    bid_increment_tiers: '',
+    bid_tier_every_n_bids: '',
+    bid_max_amount: '',
+  })
+
   // ── Login page form
   const [loginCfg, setLoginCfg] = useState({
     show_demo_login: true, login_welcome_message: '',
@@ -65,6 +75,14 @@ export default function SettingsPage() {
       default_budget_per_team: settings.default_budget_per_team ?? 1000000,
       default_max_players:     settings.default_max_players     ?? 15,
       default_bid_increments:  settings.default_bid_increments  ?? '10000,25000,50000,100000',
+    })
+    setBidRules({
+      bid_start_amount:      settings.bid_start_amount      ?? 100,
+      bid_increment_type:    settings.bid_increment_type    ?? 'tiered',
+      bid_increment_fixed:   settings.bid_increment_fixed   ?? 1000,
+      bid_increment_tiers:   settings.bid_increment_tiers   ?? '100,500,1000,2000',
+      bid_tier_every_n_bids: settings.bid_tier_every_n_bids ?? 3,
+      bid_max_amount:        settings.bid_max_amount        ?? 0,
     })
     setLoginCfg({
       show_demo_login:       settings.show_demo_login       ?? true,
@@ -134,6 +152,27 @@ export default function SettingsPage() {
         default_bid_increments:  auctionDef.default_bid_increments,
       })
       toast.success('Auction defaults saved!')
+    } catch { toast.error('Failed to save') }
+    finally { setSaving(false) }
+  }
+
+  // ── Save bidding rules
+  const saveBidRules = async () => {
+    if (bidRules.bid_increment_type === 'fixed' && Number(bidRules.bid_increment_fixed) < 1)
+      return toast.error('Fixed increment must be at least 1')
+    if (bidRules.bid_increment_type === 'tiered' && !bidRules.bid_increment_tiers.toString().trim())
+      return toast.error('Tiered increments cannot be empty')
+    setSaving(true)
+    try {
+      await updateSettings({
+        bid_start_amount:      Number(bidRules.bid_start_amount),
+        bid_increment_type:    bidRules.bid_increment_type,
+        bid_increment_fixed:   Number(bidRules.bid_increment_fixed),
+        bid_increment_tiers:   bidRules.bid_increment_tiers.toString(),
+        bid_tier_every_n_bids: Number(bidRules.bid_tier_every_n_bids),
+        bid_max_amount:        Number(bidRules.bid_max_amount),
+      })
+      toast.success('Bidding rules saved!')
     } catch { toast.error('Failed to save') }
     finally { setSaving(false) }
   }
@@ -422,65 +461,197 @@ export default function SettingsPage() {
 
       {/* ── TAB: AUCTION DEFAULTS ── */}
       {tab === 'auction' && (
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4">
-          <p className="text-sm text-slate-400">These values pre-fill the Create Auction wizard automatically.</p>
+        <div className="space-y-5">
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Default Bid Timer (seconds)"
-              type="text"
-              inputMode="numeric"
-              value={auctionDef.default_bid_timer}
-              onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_bid_timer: e.target.value })) }}
-              placeholder="30"
-            />
-            <Input
-              label="Default Budget Per Team (₹)"
-              type="text"
-              inputMode="numeric"
-              value={auctionDef.default_budget_per_team}
-              onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_budget_per_team: e.target.value })) }}
-              placeholder="1000000"
-            />
-          </div>
-
-          <Input
-            label="Default Max Players Per Team"
-            type="text"
-            inputMode="numeric"
-            value={auctionDef.default_max_players}
-            onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_max_players: e.target.value })) }}
-            placeholder="15"
-          />
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-300">Default Bid Increments (₹, comma separated)</label>
-            <input
-              value={auctionDef.default_bid_increments}
-              onChange={e => setAuctionDef(a => ({ ...a, default_bid_increments: e.target.value }))}
-              placeholder="10000,25000,50000,100000"
-              className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
-
-          {/* Increment preview */}
-          <div className="bg-slate-700/50 rounded-xl p-3">
-            <p className="text-xs text-slate-400 mb-2">Bid button preview</p>
-            <div className="flex flex-wrap gap-2">
-              {auctionDef.default_bid_increments.toString().split(',').map((v, i) => {
-                const n = Number(v.trim())
-                return n ? (
-                  <span key={i} className="px-3 py-1.5 bg-blue-600/30 border border-blue-500/30 rounded-lg text-xs font-medium text-blue-300">
-                    +{fmt(n)}
-                  </span>
-                ) : null
-              })}
+          {/* ─ Auction Defaults ─ */}
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4">
+            <div>
+              <h2 className="font-bold text-base">Auction Defaults</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Pre-fill values for the Create Auction wizard.</p>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Default Bid Timer (seconds)"
+                type="text" inputMode="numeric"
+                value={auctionDef.default_bid_timer}
+                onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_bid_timer: e.target.value })) }}
+                placeholder="30"
+              />
+              <Input
+                label="Default Budget Per Team (₹)"
+                type="text" inputMode="numeric"
+                value={auctionDef.default_budget_per_team}
+                onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_budget_per_team: e.target.value })) }}
+                placeholder="1000000"
+              />
+            </div>
+            <Input
+              label="Default Max Players Per Team"
+              type="text" inputMode="numeric"
+              value={auctionDef.default_max_players}
+              onChange={e => { if (/^\d*$/.test(e.target.value)) setAuctionDef(a => ({ ...a, default_max_players: e.target.value })) }}
+              placeholder="15"
+            />
+            <Button onClick={saveAuctionDef} disabled={saving} className="w-full">
+              {saving ? 'Saving...' : 'Save Auction Defaults'}
+            </Button>
           </div>
 
-          <Button onClick={saveAuctionDef} disabled={saving} className="w-full">
-            {saving ? 'Saving...' : 'Save Auction Defaults'}
-          </Button>
+          {/* ─ Bidding Rules ─ */}
+          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-5">
+            <div>
+              <h2 className="font-bold text-base">Bidding Rules</h2>
+              <p className="text-xs text-slate-400 mt-0.5">These rules apply live during every auction.</p>
+            </div>
+
+            {/* Opening bid */}
+            <div className="space-y-1.5">
+              <Input
+                label="Opening Bid Amount (₹)"
+                type="text" inputMode="numeric"
+                value={bidRules.bid_start_amount}
+                onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_start_amount: e.target.value })) }}
+                placeholder="100"
+              />
+              <p className="text-xs text-slate-500">Every player bidding starts from this amount. Set 0 to use each player’s own base price.</p>
+            </div>
+
+            {/* Increment type toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-300">Increment Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[['fixed', 'Fixed', 'Same jump every bid'], ['tiered', 'Tiered', 'Escalates as bids increase']].map(([val, label, desc]) => (
+                  <button
+                    key={val}
+                    onClick={() => setBidRules(b => ({ ...b, bid_increment_type: val }))}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      bidRules.bid_increment_type === val
+                        ? 'bg-blue-600/20 border-blue-500 text-white'
+                        : 'bg-slate-700 border-slate-600 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-xs mt-0.5 opacity-70">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Fixed increment */}
+            {bidRules.bid_increment_type === 'fixed' && (
+              <div className="space-y-1.5">
+                <Input
+                  label="Fixed Increment Amount (₹)"
+                  type="text" inputMode="numeric"
+                  value={bidRules.bid_increment_fixed}
+                  onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_increment_fixed: e.target.value })) }}
+                  placeholder="1000"
+                />
+                <p className="text-xs text-slate-500">Every bid must be exactly this much higher than the current bid.</p>
+              </div>
+            )}
+
+            {/* Tiered increments */}
+            {bidRules.bid_increment_type === 'tiered' && (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-300">Bid Increment Tiers (₹, comma separated)</label>
+                  <input
+                    value={bidRules.bid_increment_tiers}
+                    onChange={e => setBidRules(b => ({ ...b, bid_increment_tiers: e.target.value }))}
+                    placeholder="100,500,1000,2000"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-slate-500">Starts at tier 1, escalates to next tier after every N bids on the same player.</p>
+                </div>
+
+                {/* Tier preview */}
+                <div className="bg-slate-700/50 rounded-xl p-3">
+                  <p className="text-xs text-slate-400 mb-2">Tier preview</p>
+                  <div className="flex flex-wrap gap-2">
+                    {bidRules.bid_increment_tiers.toString().split(',').map((v, i) => {
+                      const n = Number(v.trim())
+                      return n ? (
+                        <div key={i} className="flex flex-col items-center px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-xl">
+                          <span className="text-xs text-slate-400">Tier {i + 1}</span>
+                          <span className="text-sm font-bold text-blue-300">+{fmt(n)}</span>
+                        </div>
+                      ) : null
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Input
+                    label="Escalate to next tier every N bids"
+                    type="text" inputMode="numeric"
+                    value={bidRules.bid_tier_every_n_bids}
+                    onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_tier_every_n_bids: e.target.value })) }}
+                    placeholder="3"
+                  />
+                  <p className="text-xs text-slate-500">E.g. 3 means after 3 bids on a player, jump to the next tier.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Max bid cap */}
+            <div className="space-y-1.5">
+              <Input
+                label="Maximum Bid Cap (₹)"
+                type="text" inputMode="numeric"
+                value={bidRules.bid_max_amount}
+                onChange={e => { if (/^\d*$/.test(e.target.value)) setBidRules(b => ({ ...b, bid_max_amount: e.target.value })) }}
+                placeholder="0"
+              />
+              <p className="text-xs text-slate-500">No bid can exceed this amount. Set 0 to disable the cap.</p>
+            </div>
+
+            {/* Live simulation */}
+            <div className="bg-slate-900 rounded-xl p-4 border border-slate-700 space-y-2">
+              <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Live Simulation</p>
+              {(() => {
+                const type = bidRules.bid_increment_type
+                const start = Number(bidRules.bid_start_amount) || 100
+                const tiers = bidRules.bid_increment_tiers.toString().split(',').map(v => Number(v.trim())).filter(Boolean)
+                const fixed = Number(bidRules.bid_increment_fixed) || 1000
+                const n = Number(bidRules.bid_tier_every_n_bids) || 3
+                const max = Number(bidRules.bid_max_amount) || 0
+                let current = start
+                const steps = []
+                for (let i = 0; i < 8; i++) {
+                  const tierIdx = type === 'fixed' ? 0 : Math.min(Math.floor(i / n), tiers.length - 1)
+                  const inc = type === 'fixed' ? fixed : (tiers[tierIdx] || tiers[0] || 100)
+                  const next = current + inc
+                  if (max > 0 && next > max) break
+                  steps.push({ bid: i + 1, amount: next, inc, tier: tierIdx + 1 })
+                  current = next
+                }
+                return (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                      <span className="w-8">Bid</span>
+                      <span className="w-20">Amount</span>
+                      <span className="w-20">+Increment</span>
+                      {type === 'tiered' && <span>Tier</span>}
+                    </div>
+                    {steps.map(s => (
+                      <div key={s.bid} className="flex items-center gap-2 text-xs">
+                        <span className="w-8 text-slate-500">#{s.bid}</span>
+                        <span className="w-20 font-bold text-green-400">{fmt(s.amount)}</span>
+                        <span className="w-20 text-blue-400">+{fmt(s.inc)}</span>
+                        {type === 'tiered' && <span className="text-slate-500">Tier {s.tier}</span>}
+                      </div>
+                    ))}
+                    {max > 0 && <p className="text-xs text-red-400 mt-1">🛑 Cap at {fmt(max)}</p>}
+                  </div>
+                )
+              })()}
+            </div>
+
+            <Button onClick={saveBidRules} disabled={saving} className="w-full">
+              {saving ? 'Saving...' : 'Save Bidding Rules'}
+            </Button>
+          </div>
         </div>
       )}
 
