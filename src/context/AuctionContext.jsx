@@ -1,20 +1,28 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import api from '../services/api'
 import { getEcho } from '../services/echo'
+import { useAuth } from './AuthContext'
 
 const AuctionContext = createContext(null)
 
 export function AuctionProvider({ children }) {
+  const { user } = useAuth()
   const [players, setPlayers] = useState([])
   const [teams, setTeams] = useState([])
   const [auctions, setAuctions] = useState([])
-  const [liveStates, setLiveStates] = useState({})   // { [auctionId]: liveState }
-  const [bids, setBids] = useState({})               // { [auctionId]: bid[] }
-  const [chats, setChats] = useState({})             // { [auctionId]: message[] }
+  const [liveStates, setLiveStates] = useState({})
+  const [bids, setBids] = useState({})
+  const [chats, setChats] = useState({})
   const [loading, setLoading] = useState(true)
 
-  // ── Bootstrap ──
+  // Track active channel subscriptions to prevent duplicates
+  const subscribedChannels = useRef({})
+
+  // ── Bootstrap — only when user is authenticated ──
   useEffect(() => {
+    if (!user) { setLoading(false); return }
+
+    setLoading(true)
     Promise.all([
       api.get('/teams'),
       api.get('/players'),
@@ -25,36 +33,63 @@ export function AuctionProvider({ children }) {
       setAuctions(auctionsRes.data.data ?? auctionsRes.data)
     }).catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [user])
 
-  // ── Subscribe to a live auction channel ──
+  // ── Subscribe to a live auction channel (deduped) ──
   const subscribeToAuction = useCallback((auctionId) => {
+    const key = String(auctionId)
+
+    // Already subscribed — return a no-op cleanup
+    if (subscribedChannels.current[key]) {
+      return () => {}
+    }
+
     const echo = getEcho()
-    const channel = echo.channel(`auction.${auctionId}`)
+    const channel = echo.channel(`auction.${key}`)
+    subscribedChannels.current[key] = channel
 
     channel.listen('.state.updated', (data) => {
-      setLiveStates(prev => ({ ...prev, [auctionId]: data }))
+      setLiveStates(prev => {
+        const existing = prev[key] ?? {}
+        // Merge carefully: keep existing player/bidder objects if new ones are null
+        return {
+          ...prev,
+          [key]: {
+            ...existing,
+            ...data,
+            current_player: data.current_player ?? existing.current_player ?? null,
+            current_highest_bidder: data.current_highest_bidder ?? existing.current_highest_bidder ?? null,
+          },
+        }
+      })
     })
 
     channel.listen('.bid.placed', (data) => {
-      setBids(prev => ({
-        ...prev,
-        [auctionId]: [data, ...(prev[auctionId] || [])],
-      }))
+      setBids(prev => {
+        const existing = prev[key] ?? []
+        // Dedup by id
+        if (existing.find(b => b.id === data.id)) return prev
+        return { ...prev, [key]: [data, ...existing] }
+      })
     })
 
     channel.listen('.chat.message', (data) => {
-      setChats(prev => ({
-        ...prev,
-        [auctionId]: [...(prev[auctionId] || []), data],
-      }))
+      setChats(prev => {
+        const existing = prev[key] ?? []
+        if (existing.find(m => m.id === data.id)) return prev
+        return { ...prev, [key]: [...existing, data] }
+      })
     })
 
-    return () => echo.leaveChannel(`auction.${auctionId}`)
+    return () => {
+      echo.leaveChannel(`auction.${key}`)
+      delete subscribedChannels.current[key]
+    }
   }, [])
 
-  // ── Fetch auction-specific data ──
+  // ── Fetch auction room data ──
   const loadAuctionRoom = useCallback(async (auctionId) => {
+    const key = String(auctionId)
     const [auctionRes, stateRes, bidsRes, chatRes] = await Promise.all([
       api.get(`/auctions/${auctionId}`),
       api.get(`/auctions/${auctionId}/state`),
@@ -62,13 +97,15 @@ export function AuctionProvider({ children }) {
       api.get(`/auctions/${auctionId}/chat`),
     ])
     const auction = auctionRes.data.data ?? auctionRes.data
+    const state   = stateRes.data.data ?? stateRes.data
+
     setAuctions(prev => {
       const exists = prev.find(a => a.id === auction.id)
       return exists ? prev.map(a => a.id === auction.id ? auction : a) : [auction, ...prev]
     })
-    setLiveStates(prev => ({ ...prev, [auctionId]: stateRes.data.data ?? stateRes.data }))
-    setBids(prev => ({ ...prev, [auctionId]: bidsRes.data.data ?? bidsRes.data }))
-    setChats(prev => ({ ...prev, [auctionId]: chatRes.data.data ?? chatRes.data }))
+    setLiveStates(prev => ({ ...prev, [key]: state }))
+    setBids(prev => ({ ...prev, [key]: bidsRes.data.data ?? bidsRes.data }))
+    setChats(prev => ({ ...prev, [key]: chatRes.data.data ?? chatRes.data }))
   }, [])
 
   // ── Auction CRUD ──
@@ -96,29 +133,45 @@ export function AuctionProvider({ children }) {
   // ── Live auction controls ──
   const startAuction = async (auctionId) => {
     const res = await api.post(`/auctions/${auctionId}/start`)
-    setLiveStates(prev => ({ ...prev, [auctionId]: res.data.data ?? res.data }))
+    const state = res.data.data ?? res.data
+    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
   }
 
   const stopAuction = async (auctionId) => {
     const res = await api.post(`/auctions/${auctionId}/stop`)
-    setLiveStates(prev => ({ ...prev, [auctionId]: res.data.data ?? res.data }))
+    const state = res.data.data ?? res.data
+    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
   }
 
   const nextPlayer = async (auctionId, playerId) => {
     const res = await api.post(`/auctions/${auctionId}/next-player`, { player_id: playerId })
-    setLiveStates(prev => ({ ...prev, [auctionId]: res.data.data ?? res.data }))
+    const state = res.data.data ?? res.data
+    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
+    // Update player status in auction locally
+    setAuctions(prev => prev.map(a => {
+      if (a.id !== Number(auctionId)) return a
+      return {
+        ...a,
+        players: (a.players ?? []).map(p =>
+          p.id === playerId
+            ? { ...p, pivot: { ...p.pivot, status: 'live' } }
+            : p.pivot?.status === 'live'
+              ? { ...p, pivot: { ...p.pivot, status: 'pending' } }
+              : p
+        ),
+      }
+    }))
   }
 
   const placeBid = async (auctionId, teamId, amount) => {
     const res = await api.post(`/auctions/${auctionId}/bid`, { team_id: teamId, amount })
     const bid = res.data.data ?? res.data
-    // update bid list
     setBids(prev => {
       const existing = prev[auctionId] ?? []
       if (existing.find(b => b.id === bid.id)) return prev
       return { ...prev, [auctionId]: [bid, ...existing] }
     })
-    // update team budget_remaining optimistically in auctions state
+    // Optimistically update team budget
     setAuctions(prev => prev.map(a => {
       if (a.id !== Number(auctionId)) return a
       return {
@@ -135,19 +188,21 @@ export function AuctionProvider({ children }) {
 
   const soldPlayer = async (auctionId) => {
     const res = await api.post(`/auctions/${auctionId}/sold`)
-    setLiveStates(prev => ({ ...prev, [auctionId]: res.data.data ?? res.data }))
-    // Refresh auction to get updated player statuses
+    const state = res.data.data ?? res.data
+    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
+    // Refresh full auction data (player statuses + team budgets updated server-side)
     const auctionRes = await api.get(`/auctions/${auctionId}`)
     const updated = auctionRes.data.data ?? auctionRes.data
-    setAuctions(prev => prev.map(a => a.id === auctionId ? updated : a))
+    setAuctions(prev => prev.map(a => a.id === Number(auctionId) ? updated : a))
   }
 
   const markUnsold = async (auctionId) => {
     const res = await api.post(`/auctions/${auctionId}/unsold`)
-    setLiveStates(prev => ({ ...prev, [auctionId]: res.data.data ?? res.data }))
+    const state = res.data.data ?? res.data
+    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
     const auctionRes = await api.get(`/auctions/${auctionId}`)
     const updated = auctionRes.data.data ?? auctionRes.data
-    setAuctions(prev => prev.map(a => a.id === auctionId ? updated : a))
+    setAuctions(prev => prev.map(a => a.id === Number(auctionId) ? updated : a))
   }
 
   const sendMessage = async (auctionId, message) => {
@@ -178,9 +233,7 @@ export function AuctionProvider({ children }) {
   const importPlayers = async (file) => {
     const form = new FormData()
     form.append('file', file)
-    await api.post('/players/import', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    await api.post('/players/import', form, { headers: { 'Content-Type': 'multipart/form-data' } })
     const res = await api.get('/players')
     setPlayers(res.data.data ?? res.data)
   }
@@ -208,9 +261,7 @@ export function AuctionProvider({ children }) {
   const importTeams = async (file) => {
     const form = new FormData()
     form.append('file', file)
-    await api.post('/teams/import', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    await api.post('/teams/import', form, { headers: { 'Content-Type': 'multipart/form-data' } })
     const res = await api.get('/teams')
     setTeams(res.data.data ?? res.data)
   }

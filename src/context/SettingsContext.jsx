@@ -15,7 +15,7 @@ const DEFAULTS = {
   default_max_players: 15,
   default_bid_increments: '10000,25000,50000,100000',
   // Bidding rules
-  bid_start_amount: 100,
+  bid_start_amount: 25,
   bid_increment_type: 'tiered',
   bid_increment_fixed: 1000,
   bid_increment_tiers: '100,500,1000,2000',

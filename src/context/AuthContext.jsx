@@ -6,16 +6,18 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true) // boot check
+  const [loading, setLoading] = useState(true)
 
-  // On mount — restore session from token
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
     if (!token) { setLoading(false); return }
 
     api.get('/me')
       .then(res => setUser(res.data))
-      .catch(() => localStorage.removeItem('auth_token'))
+      .catch(() => {
+        localStorage.removeItem('auth_token')
+        setUser(null)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -26,8 +28,7 @@ export function AuthProvider({ children }) {
       setUser(res.data.user)
       return { success: true }
     } catch (err) {
-      const message = err.response?.data?.message || 'Invalid credentials'
-      return { success: false, error: message }
+      return { success: false, error: err.response?.data?.message || 'Invalid credentials' }
     }
   }
 
