@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useSettings } from '../context/SettingsContext'
 import { Button, Input } from '../components/ui'
 
 const DEMO_ACCOUNTS = [
@@ -11,6 +12,7 @@ const DEMO_ACCOUNTS = [
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const { settings } = useSettings()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
@@ -41,9 +43,18 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">🏏</div>
-          <h1 className="text-3xl font-bold text-white">AuctionPro</h1>
-          <p className="text-slate-400 mt-2">Player Auction Platform</p>
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 overflow-hidden"
+            style={{ backgroundColor: settings.app_primary_color || '#2563eb' }}
+          >
+            {settings.app_logo && (settings.app_logo.startsWith('http') || settings.app_logo.startsWith('/')) ? (
+              <img src={settings.app_logo} alt="logo" className="w-full h-full object-cover" />
+            ) : (
+              settings.app_logo || '🏏'
+            )}
+          </div>
+          <h1 className="text-3xl font-bold text-white">{settings.app_name || 'AuctionPro'}</h1>
+          <p className="text-slate-400 mt-2">{settings.login_welcome_message || 'Player Auction Platform'}</p>
         </div>
 
         <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 shadow-2xl">
@@ -72,21 +83,23 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6">
-            <p className="text-xs text-slate-500 text-center mb-3">Quick Demo Login</p>
-            <div className="grid grid-cols-3 gap-2">
-              {DEMO_ACCOUNTS.map(acc => (
-                <button
-                  key={acc.label}
-                  onClick={() => quickLogin(acc)}
-                  disabled={loading}
-                  className="py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-xs font-medium text-slate-300 transition-colors disabled:opacity-50"
-                >
-                  {acc.label}
-                </button>
-              ))}
+          {settings.show_demo_login && (
+            <div className="mt-6">
+              <p className="text-xs text-slate-500 text-center mb-3">Quick Demo Login</p>
+              <div className="grid grid-cols-3 gap-2">
+                {DEMO_ACCOUNTS.map(acc => (
+                  <button
+                    key={acc.label}
+                    onClick={() => quickLogin(acc)}
+                    disabled={loading}
+                    className="py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-xs font-medium text-slate-300 transition-colors disabled:opacity-50"
+                  >
+                    {acc.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

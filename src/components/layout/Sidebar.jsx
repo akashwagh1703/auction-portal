@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useSettings } from '../../context/SettingsContext'
 import api from '../../services/api'
 import {
   LayoutDashboard, Users, Gavel, MessageSquare, Trophy,
-  LogOut, Menu, X, ChevronRight, UserCircle, Trash2, AlertTriangle
+  LogOut, Menu, X, ChevronRight, UserCircle, Trash2, AlertTriangle, Settings
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'owner', 'player'] },
-  { path: '/players', label: 'Players', icon: Users, roles: ['admin', 'owner', 'player'] },
-  { path: '/auctions', label: 'Auctions', icon: Gavel, roles: ['admin', 'owner', 'player'] },
-  { path: '/teams', label: 'Teams', icon: Trophy, roles: ['admin', 'owner', 'player'] },
-  { path: '/chat', label: 'Team Chat', icon: MessageSquare, roles: ['admin', 'owner', 'player'] },
-  { path: '/profile', label: 'My Profile', icon: UserCircle, roles: ['player'] },
+  { path: '/players',   label: 'Players',   icon: Users,           roles: ['admin', 'owner', 'player'] },
+  { path: '/auctions',  label: 'Auctions',  icon: Gavel,           roles: ['admin', 'owner', 'player'] },
+  { path: '/teams',     label: 'Teams',     icon: Trophy,          roles: ['admin', 'owner', 'player'] },
+  { path: '/chat',      label: 'Team Chat', icon: MessageSquare,   roles: ['admin', 'owner', 'player'] },
+  { path: '/profile',   label: 'My Profile',icon: UserCircle,      roles: ['player'] },
+  { path: '/settings',  label: 'Settings',  icon: Settings,        roles: ['admin'] },
 ]
 
 function NavLink({ item, onClick }) {
@@ -37,6 +39,7 @@ function NavLink({ item, onClick }) {
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const { settings } = useSettings()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [resetModal, setResetModal] = useState(false)
@@ -69,9 +72,18 @@ export default function Sidebar() {
     <div className="flex flex-col h-full bg-slate-800 text-white">
       <div className="p-5 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-xl">🏏</div>
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl overflow-hidden"
+            style={{ backgroundColor: settings.app_primary_color || '#2563eb' }}
+          >
+            {settings.app_logo && (settings.app_logo.startsWith('http') || settings.app_logo.startsWith('/')) ? (
+              <img src={settings.app_logo} alt="logo" className="w-full h-full object-cover" />
+            ) : (
+              settings.app_logo || '🏏'
+            )}
+          </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">AuctionPro</h1>
+            <h1 className="font-bold text-lg leading-tight">{settings.app_name || 'AuctionPro'}</h1>
             <p className="text-xs text-slate-400 capitalize">{user?.role} Panel</p>
           </div>
         </div>
