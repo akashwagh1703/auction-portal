@@ -1094,18 +1094,18 @@ export default function AuctionRoomPage() {
               )}
             </div>
           </div>
-          <style>{`
-            @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-100px) scale(1.5);opacity:0}}
-            @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scaleX(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scaleX(0.5);opacity:0}}
-            @keyframes celebPop{0%{transform:scale(0.4);opacity:0}100%{transform:scale(1);opacity:1}}
-            @keyframes celebGlow{0%{opacity:0.5}100%{opacity:1}}
-            @keyframes celebBounce{0%{transform:translateY(0) scale(1)}100%{transform:translateY(-8px) scale(1.08)}}
-            @keyframes spinRevealPop{0%{transform:scale(0.2) rotate(-15deg);opacity:0}100%{transform:scale(1) rotate(0deg);opacity:1}}
-            @keyframes spinRays{0%{transform:rotate(0deg);opacity:0.8}100%{transform:rotate(180deg);opacity:0}}
-          `}</style>
         </div>
 
       </div>{/* end 3-col grid */}
+      <style>{`
+        @keyframes floatUp{0%{transform:translateY(0) scale(1);opacity:1}100%{transform:translateY(-100px) scale(1.5);opacity:0}}
+        @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg) scaleX(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scaleX(0.5);opacity:0}}
+        @keyframes celebPop{0%{transform:scale(0.4);opacity:0}100%{transform:scale(1);opacity:1}}
+        @keyframes celebGlow{0%{opacity:0.5}100%{opacity:1}}
+        @keyframes celebBounce{0%{transform:translateY(0) scale(1)}100%{transform:translateY(-8px) scale(1.08)}}
+        @keyframes spinRevealPop{0%{transform:scale(0.2) rotate(-15deg);opacity:0}100%{transform:scale(1) rotate(0deg);opacity:1}}
+        @keyframes spinRays{0%{transform:rotate(0deg);opacity:0.8}100%{transform:rotate(180deg);opacity:0}}
+      `}</style>
 
     </div>
   )
