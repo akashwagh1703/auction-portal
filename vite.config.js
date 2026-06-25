@@ -17,13 +17,22 @@ export default defineConfig({
     // Rollup options for optimization
     rollupOptions: {
       output: {
-        // Manual chunks for better caching
-        manualChunks: {
-          // Vendor chunks
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['lucide-react', 'react-hot-toast'],
-          'api-vendor': ['axios', 'laravel-echo', 'pusher-js'],
-          'utils-vendor': ['xlsx'],
+        // Manual chunks for better caching (function for Vite v8 compatibility)
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor'
+            }
+            if (id.includes('lucide-react') || id.includes('react-hot-toast')) {
+              return 'ui-vendor'
+            }
+            if (id.includes('axios') || id.includes('laravel-echo') || id.includes('pusher')) {
+              return 'api-vendor'
+            }
+            if (id.includes('xlsx')) {
+              return 'utils-vendor'
+            }
+          }
         },
         // Asset naming
         assetFileNames: 'assets/[name]-[hash][extname]',
