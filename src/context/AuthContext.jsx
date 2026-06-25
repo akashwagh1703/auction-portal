@@ -9,13 +9,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    if (!token) { setLoading(false); return }
-
+    // Check if user is authenticated by calling /me
+    // Cookies are sent automatically with withCredentials: true
     api.get('/me')
       .then(res => setUser(res.data))
       .catch(() => {
-        localStorage.removeItem('auth_token')
         setUser(null)
       })
       .finally(() => setLoading(false))
@@ -24,7 +22,7 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       const res = await api.post('/login', { email, password })
-      localStorage.setItem('auth_token', res.data.token)
+      // Token is now set as httpOnly cookie by the server
       setUser(res.data.user)
       return { success: true }
     } catch (err) {
@@ -34,7 +32,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try { await api.post('/logout') } catch (_) {}
-    localStorage.removeItem('auth_token')
+    // Cookie is cleared by the server
     disconnectEcho()
     setUser(null)
   }

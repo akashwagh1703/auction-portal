@@ -4,12 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import { useSettings } from '../context/SettingsContext'
 import { Button, Input } from '../components/ui'
 
-const DEMO_ACCOUNTS = [
-  { label: 'Admin',  email: 'admin@auction.com',  password: 'admin123' },
-  { label: 'Owner',  email: 'mumbai@auction.com',  password: 'owner123' },
-  { label: 'Player', email: 'virat@auction.com',   password: 'player123' },
-]
-
 export default function LoginPage() {
   const { login } = useAuth()
   const { settings } = useSettings()
@@ -25,15 +19,6 @@ export default function LoginPage() {
     if (!form.password) return setError('Password is required')
     setLoading(true)
     const result = await login(form.email, form.password)
-    if (result.success) { navigate('/dashboard') }
-    else setError(result.error)
-    setLoading(false)
-  }
-
-  const quickLogin = async (acc) => {
-    setError('')
-    setLoading(true)
-    const result = await login(acc.email, acc.password)
     if (result.success) { navigate('/dashboard') }
     else setError(result.error)
     setLoading(false)
@@ -82,24 +67,6 @@ export default function LoginPage() {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-
-          {settings.show_demo_login && (
-            <div className="mt-6">
-              <p className="text-xs text-slate-500 text-center mb-3">Quick Demo Login</p>
-              <div className="grid grid-cols-3 gap-2">
-                {DEMO_ACCOUNTS.map(acc => (
-                  <button
-                    key={acc.label}
-                    onClick={() => quickLogin(acc)}
-                    disabled={loading}
-                    className="py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-xs font-medium text-slate-300 transition-colors disabled:opacity-50"
-                  >
-                    {acc.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

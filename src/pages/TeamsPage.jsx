@@ -119,31 +119,39 @@ export default function TeamsPage() {
           {isAdmin && <p className="text-slate-500 text-sm mt-1">Add your first team to get started</p>}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {teams.map(team => (
             <div key={team.id} className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-bold text-white"
+                    className="w-14 h-14 md:w-12 md:h-12 rounded-xl flex items-center justify-center text-2xl font-bold text-white shrink-0"
                     style={{ backgroundColor: team.color || '#3B82F6' }}
                   >
                     {team.logo || team.name[0]}
                   </div>
-                  <div>
-                    <h2 className="text-lg font-bold">{team.name}</h2>
-                    <p className="text-sm text-slate-400">{team.short_name}</p>
-                    {team.email && <p className="text-xs text-slate-500 mt-0.5">{team.email}</p>}
-                    {team.phone && <p className="text-xs text-slate-500">{team.phone}</p>}
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-bold truncate">{team.name}</h2>
+                    <p className="text-sm text-slate-400 truncate">{team.short_name}</p>
+                    {team.email && <p className="text-xs text-slate-500 mt-0.5 truncate">{team.email}</p>}
+                    {team.phone && <p className="text-xs text-slate-500 truncate">{team.phone}</p>}
                   </div>
                 </div>
                 {isAdmin && (
-                  <div className="flex gap-2">
-                    <button onClick={() => openEdit(team)} className="p-2 hover:bg-slate-600 rounded-lg text-slate-400 hover:text-white transition-colors">
-                      <Edit2 size={15} />
+                  <div className="flex gap-2 shrink-0 ml-2">
+                    <button
+                      onClick={() => openEdit(team)}
+                      className="w-10 h-10 flex items-center justify-center hover:bg-slate-600 rounded-lg text-slate-400 hover:text-white transition-colors"
+                      aria-label="Edit team"
+                    >
+                      <Edit2 size={18} />
                     </button>
-                    <button onClick={() => handleDelete(team.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-slate-400 hover:text-red-400 transition-colors">
-                      <Trash2 size={15} />
+                    <button
+                      onClick={() => handleDelete(team.id)}
+                      className="w-10 h-10 flex items-center justify-center hover:bg-red-500/20 rounded-lg text-slate-400 hover:text-red-400 transition-colors"
+                      aria-label="Delete team"
+                    >
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 )}

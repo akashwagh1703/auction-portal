@@ -147,29 +147,29 @@ export default function PlayersPage() {
       </div>
 
       {/* Mobile: Cards */}
-      <div className="block md:hidden space-y-3">
+      <div className="block md:hidden space-y-4">
         {filtered.map(p => (
           <div key={p.id} className="bg-slate-800 rounded-2xl border border-slate-700 p-4">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center font-bold">{p.name[0]}</div>
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                  <p className="text-xs text-slate-400">{p.role} • {p.nationality}</p>
-                  {p.email && <p className="text-xs text-slate-500">{p.email}</p>}
-                  {p.phone && <p className="text-xs text-slate-500">{p.phone}</p>}
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center font-bold text-lg shrink-0">{p.name[0]}</div>
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{p.name}</p>
+                  <p className="text-xs text-slate-400 truncate">{p.role} • {p.nationality}</p>
+                  {p.email && <p className="text-xs text-slate-500 truncate">{p.email}</p>}
+                  {p.phone && <p className="text-xs text-slate-500 truncate">{p.phone}</p>}
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div className="grid grid-cols-3 gap-3 mt-4 text-center">
               <div><p className="text-xs text-slate-400">Base</p><p className="text-sm font-medium">{fmt(p.base_price)}</p></div>
               <div><p className="text-xs text-slate-400">Rating</p><p className="text-sm font-medium">{p.rating}</p></div>
               <div><p className="text-xs text-slate-400">Age</p><p className="text-sm font-medium">{p.age}</p></div>
             </div>
             {isAdmin && (
-              <div className="flex gap-2 mt-3">
-                <Button variant="ghost" size="sm" className="flex-1" onClick={() => openEdit(p)}><Edit2 size={14} /> Edit</Button>
-                <Button variant="danger" size="sm" className="flex-1" onClick={() => handleDelete(p.id)}><Trash2 size={14} /> Delete</Button>
+              <div className="flex gap-3 mt-4">
+                <Button variant="ghost" size="sm" className="flex-1" onClick={() => openEdit(p)} ariaLabel="Edit player"><Edit2 size={16} /> Edit</Button>
+                <Button variant="danger" size="sm" className="flex-1" onClick={() => handleDelete(p.id)} ariaLabel="Delete player"><Trash2 size={16} /> Delete</Button>
               </div>
             )}
           </div>

@@ -14,9 +14,11 @@ export function AuctionProvider({ children }) {
   const [bids, setBids] = useState({})
   const [chats, setChats] = useState({})
   const [loading, setLoading] = useState(true)
+  const [connectionStatus, setConnectionStatus] = useState('disconnected')
 
   // Track active channel subscriptions to prevent duplicates
   const subscribedChannels = useRef({})
+  const reconnectTimeoutRef = useRef(null)
 
   // ── Bootstrap — only when user is authenticated ──
   useEffect(() => {
@@ -48,7 +50,10 @@ export function AuctionProvider({ children }) {
     const channel = echo.channel(`auction.${key}`)
     subscribedChannels.current[key] = channel
 
+    setConnectionStatus('connecting')
+
     channel.listen('.state.updated', (data) => {
+      setConnectionStatus('connected')
       setLiveStates(prev => {
         const existing = prev[key] ?? {}
         // Merge carefully: keep existing player/bidder objects if new ones are null
@@ -65,6 +70,7 @@ export function AuctionProvider({ children }) {
     })
 
     channel.listen('.bid.placed', (data) => {
+      setConnectionStatus('connected')
       setBids(prev => {
         const existing = prev[key] ?? []
         // Dedup by id
@@ -74,11 +80,26 @@ export function AuctionProvider({ children }) {
     })
 
     channel.listen('.chat.message', (data) => {
+      setConnectionStatus('connected')
       setChats(prev => {
         const existing = prev[key] ?? []
         if (existing.find(m => m.id === data.id)) return prev
         return { ...prev, [key]: [...existing, data] }
       })
+    })
+
+    // Handle connection errors
+    channel.listenError((error) => {
+      console.error('WebSocket error:', error)
+      setConnectionStatus('error')
+      // Attempt reconnection after delay
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      reconnectTimeoutRef.current = setTimeout(() => {
+        setConnectionStatus('reconnecting')
+        subscribeToAuction(auctionId)
+      }, 3000)
     })
 
     return () => {
@@ -303,7 +324,7 @@ export function AuctionProvider({ children }) {
 
   return (
     <AuctionContext.Provider value={{
-      players, teams, auctions, liveStates, bids, chats, loading,
+      players, teams, auctions, liveStates, bids, chats, loading, connectionStatus,
       setLiveStates,
       createAuction, updateAuction, deleteAuction, getAuction,
       startAuction, stopAuction, nextPlayer, placeBid, soldPlayer, markUnsold, reAuction,

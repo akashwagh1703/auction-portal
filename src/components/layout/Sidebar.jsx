@@ -167,21 +167,22 @@ export default function Sidebar({ collapsed = false, onToggle }) {
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 w-11 h-11 bg-slate-800 text-white rounded-xl flex items-center justify-center shadow-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 w-12 h-12 bg-slate-800 text-white rounded-xl flex items-center justify-center shadow-lg"
+        aria-label="Open menu"
       >
-        <Menu size={22} />
+        <Menu size={24} />
       </button>
 
       {/* Mobile drawer overlay */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
-          <div className="relative w-72 h-full shadow-2xl">
+          <div className="relative w-[85%] max-w-sm h-full shadow-2xl">
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-4 z-10 w-8 h-8 bg-slate-700 rounded-lg flex items-center justify-center text-white"
+              className="absolute top-4 right-4 z-10 w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center text-white"
             >
-              <X size={16} />
+              <X size={20} />
             </button>
             <SidebarContent />
           </div>

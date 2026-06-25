@@ -285,7 +285,7 @@ export default function AuctionRoomPage() {
   ]
 
   return (
-    <div className="flex flex-col bg-slate-950 -mt-16 -mx-4 -mb-4 lg:-mt-1 lg:-mx-8 lg:-mb-8" style={{ height: '100dvh' }}>
+    <div className="flex flex-col bg-slate-950 -mt-16 -mx-4 -mb-4 lg:-mt-1 lg:-mx-8 lg:-mb-8" style={{ height: 'calc(100vh - 64px)' }}>
 
       {/* ══ SOLD CELEBRATION OVERLAY ══ */}
       {celebration && (
@@ -517,8 +517,8 @@ export default function AuctionRoomPage() {
             {liveState.is_live && <div className="w-px h-8 md:h-12 bg-slate-800 hidden md:block" />}
 
             {/* Countdown ring */}
-            <div className="relative w-10 h-10 md:w-14 md:h-14 shrink-0">
-              <svg className="w-10 h-10 md:w-14 md:h-14 -rotate-90" viewBox="0 0 56 56">
+            <div className="relative w-12 h-12 md:w-14 md:h-14 shrink-0">
+              <svg className="w-12 h-12 md:w-14 md:h-14 -rotate-90" viewBox="0 0 56 56">
                 <circle cx="28" cy="28" r="24" fill="none" stroke="#1e293b" strokeWidth="4" />
                 <circle
                   cx="28" cy="28" r="24" fill="none"
@@ -530,8 +530,8 @@ export default function AuctionRoomPage() {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-xs md:text-base font-black tabular-nums leading-none ${timerColor}`}>{timer}</span>
-                <span className="text-slate-600" style={{ fontSize: '8px' }}>SEC</span>
+                <span className={`text-sm md:text-base font-black tabular-nums leading-none ${timerColor}`}>{timer}</span>
+                <span className="text-slate-600 text-[10px] md:text-[8px]">SEC</span>
               </div>
             </div>
           </div>
