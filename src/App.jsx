@@ -14,7 +14,6 @@ const PlayersPage = lazy(() => import('./pages/PlayersPage'))
 const AuctionsListPage = lazy(() => import('./pages/AuctionsListPage'))
 const AuctionRoomPage = lazy(() => import('./pages/AuctionRoomPage'))
 const TeamsPage = lazy(() => import('./pages/TeamsPage'))
-const ChatPage = lazy(() => import('./pages/ChatPage'))
 const PlayerProfilePage = lazy(() => import('./pages/PlayerProfilePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
@@ -58,7 +57,6 @@ export default function App() {
               <Route path="/auctions" element={<LayoutRoute><AuctionsListPage /></LayoutRoute>} />
               <Route path="/auctions/:id" element={<LayoutRoute><AuctionRoomPage /></LayoutRoute>} />
               <Route path="/teams" element={<LayoutRoute><TeamsPage /></LayoutRoute>} />
-              <Route path="/chat" element={<LayoutRoute><ChatPage /></LayoutRoute>} />
               <Route path="/profile" element={<ProtectedRoute roles={['player']}><AuctionProvider><AppLayout><Suspense fallback={<PageLoader />}><PlayerProfilePage /></Suspense></AppLayout></AuctionProvider></ProtectedRoute>} />
               <Route path="/settings" element={<LayoutRoute><SettingsPage /></LayoutRoute>} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

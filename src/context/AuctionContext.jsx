@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import api from '../services/api'
-import { getEcho } from '../services/echo'
 import { useAuth } from './AuthContext'
 
 const AuctionContext = createContext(null)
@@ -10,15 +9,8 @@ export function AuctionProvider({ children }) {
   const [players, setPlayers] = useState([])
   const [teams, setTeams] = useState([])
   const [auctions, setAuctions] = useState([])
-  const [liveStates, setLiveStates] = useState({})
-  const [bids, setBids] = useState({})
-  const [chats, setChats] = useState({})
+  const [auctionState, setAuctionState] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [connectionStatus, setConnectionStatus] = useState('disconnected')
-
-  // Track active channel subscriptions to prevent duplicates
-  const subscribedChannels = useRef({})
-  const reconnectTimeoutRef = useRef(null)
 
   // ── Bootstrap — only when user is authenticated ──
   useEffect(() => {
@@ -37,96 +29,10 @@ export function AuctionProvider({ children }) {
       .finally(() => setLoading(false))
   }, [user])
 
-  // ── Subscribe to a live auction channel (deduped) ──
-  const subscribeToAuction = useCallback((auctionId) => {
-    const key = String(auctionId)
-
-    // Already subscribed — return a no-op cleanup
-    if (subscribedChannels.current[key]) {
-      return () => {}
-    }
-
-    const echo = getEcho()
-    const channel = echo.channel(`auction.${key}`)
-    subscribedChannels.current[key] = channel
-
-    setConnectionStatus('connecting')
-
-    channel.listen('.state.updated', (data) => {
-      setConnectionStatus('connected')
-      setLiveStates(prev => {
-        const existing = prev[key] ?? {}
-        // Merge carefully: keep existing player/bidder objects if new ones are null
-        return {
-          ...prev,
-          [key]: {
-            ...existing,
-            ...data,
-            current_player: data.current_player ?? existing.current_player ?? null,
-            current_highest_bidder: data.current_highest_bidder ?? existing.current_highest_bidder ?? null,
-          },
-        }
-      })
-    })
-
-    channel.listen('.bid.placed', (data) => {
-      setConnectionStatus('connected')
-      setBids(prev => {
-        const existing = prev[key] ?? []
-        // Dedup by id
-        if (existing.find(b => b.id === data.id)) return prev
-        return { ...prev, [key]: [data, ...existing] }
-      })
-    })
-
-    channel.listen('.chat.message', (data) => {
-      setConnectionStatus('connected')
-      setChats(prev => {
-        const existing = prev[key] ?? []
-        if (existing.find(m => m.id === data.id)) return prev
-        return { ...prev, [key]: [...existing, data] }
-      })
-    })
-
-    // Handle connection errors
-    channel.listenError((error) => {
-      console.error('WebSocket error:', error)
-      setConnectionStatus('error')
-      // Attempt reconnection after delay
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-      }
-      reconnectTimeoutRef.current = setTimeout(() => {
-        setConnectionStatus('reconnecting')
-        subscribeToAuction(auctionId)
-      }, 3000)
-    })
-
-    return () => {
-      echo.leaveChannel(`auction.${key}`)
-      delete subscribedChannels.current[key]
-    }
-  }, [])
-
-  // ── Fetch auction room data ──
+  // ── Fetch auction room data (HTTP-based polling) ──
   const loadAuctionRoom = useCallback(async (auctionId) => {
-    const key = String(auctionId)
-    const [auctionRes, stateRes, bidsRes, chatRes] = await Promise.all([
-      api.get(`/auctions/${auctionId}`),
-      api.get(`/auctions/${auctionId}/state`),
-      api.get(`/auctions/${auctionId}/bids`),
-      api.get(`/auctions/${auctionId}/chat`),
-    ])
-    const auction = auctionRes.data.data ?? auctionRes.data
-    const state   = stateRes.data.data ?? stateRes.data
-
-    setAuctions(prev => {
-      const exists = prev.find(a => a.id === auction.id)
-      return exists ? prev.map(a => a.id === auction.id ? auction : a) : [auction, ...prev]
-    })
-    setLiveStates(prev => ({ ...prev, [key]: state }))
-    setBids(prev => ({ ...prev, [key]: bidsRes.data.data ?? bidsRes.data }))
-    setChats(prev => ({ ...prev, [key]: chatRes.data.data ?? chatRes.data }))
+    const res = await api.get(`/auctions/${auctionId}/state`)
+    setAuctionState(res.data)
   }, [])
 
   // ── Auction CRUD ──
@@ -151,114 +57,29 @@ export function AuctionProvider({ children }) {
 
   const getAuction = (id) => auctions.find(a => a.id === Number(id))
 
-  // ── Live auction controls ──
-  const startAuction = async (auctionId) => {
-    const res = await api.post(`/auctions/${auctionId}/start`)
-    const state = res.data.data ?? res.data
-    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
+  // ── HTTP-based bidding controls ──
+  const placeBid = async (auctionId, playerId, amount) => {
+    const res = await api.post(`/auctions/${auctionId}/players/${playerId}/bid`, { amount })
+    await loadAuctionRoom(auctionId) // Refresh state after bid
+    return res.data
   }
 
-  const stopAuction = async (auctionId) => {
-    const res = await api.post(`/auctions/${auctionId}/stop`)
-    const state = res.data.data ?? res.data
-    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
+  const soldPlayer = async (auctionId, playerId, teamId, price) => {
+    const res = await api.post(`/auctions/${auctionId}/players/${playerId}/sold`, { team_id: teamId, price })
+    await loadAuctionRoom(auctionId)
+    return res.data
   }
 
-  const nextPlayer = async (auctionId, playerId) => {
-    const res = await api.post(`/auctions/${auctionId}/next-player`, { player_id: playerId })
-    const state = res.data.data ?? res.data
-    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
-    // Update player status in auction locally
-    setAuctions(prev => prev.map(a => {
-      if (a.id !== Number(auctionId)) return a
-      return {
-        ...a,
-        players: (a.players ?? []).map(p =>
-          p.id === playerId
-            ? { ...p, pivot: { ...p.pivot, status: 'live' } }
-            : p.pivot?.status === 'live'
-              ? { ...p, pivot: { ...p.pivot, status: 'pending' } }
-              : p
-        ),
-      }
-    }))
+  const markUnsold = async (auctionId, playerId) => {
+    const res = await api.post(`/auctions/${auctionId}/players/${playerId}/unsold`)
+    await loadAuctionRoom(auctionId)
+    return res.data
   }
 
-  const placeBid = async (auctionId, teamId, amount) => {
-    const res = await api.post(`/auctions/${auctionId}/bid`, { team_id: teamId, amount })
-    const bid = res.data.data ?? res.data
-    setBids(prev => {
-      const existing = prev[auctionId] ?? []
-      if (existing.find(b => b.id === bid.id)) return prev
-      return { ...prev, [auctionId]: [bid, ...existing] }
-    })
-    // Capture current state snapshot before any updates
-    const prevState = liveStates[String(auctionId)] ?? {}
-    const prevHighestId = prevState.current_highest_bidder_id
-    const prevBid = Number(prevState.current_bid ?? 0)
-    // Update liveState with new current_bid + next_bid
-    setLiveStates(prev => {
-      const key = String(auctionId)
-      const existing = prev[key] ?? {}
-      return {
-        ...prev,
-        [key]: { ...existing, current_bid: bid.amount, current_highest_bidder_id: teamId, next_bid: bid.next_bid ?? existing.next_bid },
-      }
-    })
-    // Patch team budgets: restore previous highest bidder's reserved amount, deduct new bidder
-    setAuctions(prev => prev.map(a => {
-      if (a.id !== Number(auctionId)) return a
-      return {
-        ...a,
-        teams: (a.teams ?? []).map(t => {
-          if (prevHighestId && t.id === Number(prevHighestId) && t.id !== teamId)
-            return { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) + prevBid } }
-          if (t.id === teamId)
-            return { ...t, pivot: { ...t.pivot, budget_remaining: Number(t.pivot?.budget_remaining ?? 0) - bid.amount } }
-          return t
-        }),
-      }
-    }))
-    return bid
-  }
-
-  const soldPlayer = async (auctionId) => {
-    const res = await api.post(`/auctions/${auctionId}/sold`)
-    const state = res.data.data ?? res.data
-    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
-    // Refresh full auction data (player statuses + team budgets updated server-side)
-    const auctionRes = await api.get(`/auctions/${auctionId}`)
-    const updated = auctionRes.data.data ?? auctionRes.data
-    setAuctions(prev => prev.map(a => a.id === Number(auctionId) ? updated : a))
-  }
-
-  const markUnsold = async (auctionId) => {
-    const res = await api.post(`/auctions/${auctionId}/unsold`)
-    const state = res.data.data ?? res.data
-    setLiveStates(prev => ({ ...prev, [auctionId]: state }))
-    const auctionRes = await api.get(`/auctions/${auctionId}`)
-    const updated = auctionRes.data.data ?? auctionRes.data
-    setAuctions(prev => prev.map(a => a.id === Number(auctionId) ? updated : a))
-  }
-
-  const reAuction = async (auctionId, playerId = null) => {
-    await api.post(`/auctions/${auctionId}/re-auction`, playerId ? { player_id: playerId } : {})
-    setAuctions(prev => prev.map(a => {
-      if (a.id !== Number(auctionId)) return a
-      return {
-        ...a,
-        players: (a.players ?? []).map(p => {
-          if (p.pivot?.status !== 'unsold') return p
-          if (playerId && p.id !== playerId) return p
-          return { ...p, pivot: { ...p.pivot, status: 'pending', sold_to_team_id: null, sold_price: null } }
-        }),
-      }
-    }))
-  }
-
-  const sendMessage = async (auctionId, message) => {
-    const res = await api.post(`/auctions/${auctionId}/chat`, { message })
-    return res.data.data ?? res.data
+  const nextPlayer = async (auctionId) => {
+    const res = await api.post(`/auctions/${auctionId}/next-player`)
+    await loadAuctionRoom(auctionId)
+    return res.data
   }
 
   // ── Players CRUD ──
@@ -324,11 +145,9 @@ export function AuctionProvider({ children }) {
 
   return (
     <AuctionContext.Provider value={{
-      players, teams, auctions, liveStates, bids, chats, loading, connectionStatus,
-      setLiveStates,
+      players, teams, auctions, auctionState, loading,
       createAuction, updateAuction, deleteAuction, getAuction,
-      startAuction, stopAuction, nextPlayer, placeBid, soldPlayer, markUnsold, reAuction,
-      sendMessage, loadAuctionRoom, subscribeToAuction,
+      placeBid, soldPlayer, markUnsold, nextPlayer, loadAuctionRoom,
       addPlayer, updatePlayer, deletePlayer, importPlayers,
       addTeam, updateTeam, deleteTeam, importTeams, refreshTeams,
     }}>
