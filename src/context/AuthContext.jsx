@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import api from '../services/api'
-import { disconnectEcho } from '../services/echo'
 
 const AuthContext = createContext(null)
 
@@ -33,7 +32,6 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try { await api.post('/logout') } catch (_) {}
     // Cookie is cleared by the server
-    disconnectEcho()
     setUser(null)
   }
 
